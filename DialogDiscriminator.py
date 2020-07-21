@@ -46,7 +46,7 @@ class DialogDiscriminator:
     def weight_losses(self, x, y, gen_output, gen_losses, gen_tokenizer):
         scores = torch.empty(gen_output.size(0)*2, gen_output.size(1)).to(self.device)
         disc_losses = torch.empty(0).to(self.device)
-        for i in range(gen_output.size(1)):
+        for i in tqdm(range(gen_output.size(1)), desc="weighting"):
             gen_input = torch.cat((y[:,0:i],gen_output[:,i].unsqueeze(1)), dim=1)
             real_input = y[:,0:i+1]
             input = self.retokenize_batch(x, gen_input, real_input, gen_tokenizer)

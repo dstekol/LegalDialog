@@ -19,6 +19,7 @@ class DialogGenerator:
         self.step = 0
         self.epoch = 0
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(self.device)
         #self.device = torch.device("cpu") #remove______________________________________
         self.gen_model.to(self.device)
         self.save_path = save_path
@@ -85,7 +86,7 @@ class DialogGenerator:
         generated = torch.zeros(batches, 0, dtype=torch.long).to(self.device)
         true_generated = torch.zeros(batches, max_length, dtype=torch.long).to(self.device)
         losses = torch.empty(batches, max_length).to(self.device)
-        for i in range(max_length):
+        for i in tqdm(range(max_length), desc='generating'):
             input = torch.cat((x, generated), dim=1)
             output = self.gen_model(input)
             logits = output[0][:, -1, :]
