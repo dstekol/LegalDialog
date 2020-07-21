@@ -37,7 +37,7 @@ class DialogGenerator:
                 x, y = x.to(self.device), y.to(self.device)
                 output, losses, true_output = self.generate_with_forcing(x, y, 1, max_out_length)
                 loss = losses.sum()
-                step_model(self, loss, self.writer, "gen_loss")
+                step_model(self, loss, False, self.writer, "gen_loss")
             self.save_checkpoint(x, y, output, true_output) # deindent___________________________
             self.epoch += 1
 
@@ -80,7 +80,7 @@ class DialogGenerator:
     def generate_with_forcing(self, x, y, forcing_ratio, max_length):
         ce_loss = CrossEntropyLoss()
         batches = y.size(0)
-        max_length = max(max_length, y.size(1))
+        max_length = min(max_length, y.size(1))
         #max_length = 3 # remove__________________________________________________________
         generated = torch.zeros(batches, 0, dtype=torch.long).to(self.device)
         true_generated = torch.zeros(batches, max_length, dtype=torch.long).to(self.device)
@@ -92,7 +92,7 @@ class DialogGenerator:
             gen_words = torch.argmax(logits, dim=-1)
             losses[:, i] = ce_loss(logits, y[:, i])
             teacher_words = y[:, i]
-            rand = torch.rand(gen_words.size())
+            rand = torch.rand(gen_words.size()).to(self.device)
             word_selection = (rand < forcing_ratio).float()
             output_words = word_selection * teacher_words + (1 - word_selection) * gen_words
             output_words = output_words.long().unsqueeze(1)
