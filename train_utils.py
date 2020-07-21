@@ -20,7 +20,7 @@ def create_scheduler(optimizer, warmup_steps, total_steps):
     return scheduler
 
 def step_model(model, loss, retain_graph, writer, writer_tag):
-    writer.add_scalar(writer_tag, loss, model.step)
+    writer.add_scalar(writer_tag, loss.item(), model.step)
     model.optimizer.zero_grad()
     loss.backward(retain_graph=retain_graph)
     model.optimizer.step()

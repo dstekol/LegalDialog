@@ -86,7 +86,7 @@ class DialogGenerator:
         generated = torch.zeros(batches, 0, dtype=torch.long).to(self.device)
         true_generated = torch.zeros(batches, max_length, dtype=torch.long).to(self.device)
         losses = torch.empty(batches, max_length).to(self.device)
-        for i in tqdm(range(max_length), desc='generating'):
+        for i in range(max_length):
             input = torch.cat((x, generated), dim=1)
             output = self.gen_model(input)
             logits = output[0][:, -1, :]
