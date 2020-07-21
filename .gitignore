@@ -12,7 +12,6 @@
 *.sln
 *.pyproj
 *.pyproj.user
-*.pkl
 *.torch
 __pycache__/
 .vs/

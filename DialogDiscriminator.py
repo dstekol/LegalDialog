@@ -13,7 +13,7 @@ class DialogDiscriminator:
         self.step = 0
         self.epoch = 0
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.device = torch.device("cpu") #remove _______________________________________
+        #self.device = torch.device("cpu") #remove _______________________________________
         self.optimizer = create_optimizer(self.disc_model, opt_params["weight_decay"], opt_params["lr"], opt_params["epsilon"])
         self.scheduler = create_scheduler(self.optimizer, opt_params["warmup_steps"], opt_params["total_steps"])
         self.disc_model.to(self.device)

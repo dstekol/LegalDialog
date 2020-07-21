@@ -19,7 +19,7 @@ class DialogGenerator:
         self.step = 0
         self.epoch = 0
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.device = torch.device("cpu") #remove______________________________________
+        #self.device = torch.device("cpu") #remove______________________________________
         self.gen_model.to(self.device)
         self.save_path = save_path
         if(save_path is not None):
@@ -38,7 +38,7 @@ class DialogGenerator:
                 output, losses, true_output = self.generate_with_forcing(x, y, 1, max_out_length)
                 loss = losses.sum()
                 step_model(self, loss, self.writer, "gen_loss")
-                self.save_checkpoint(x, y, output, true_output) # deindent___________________________
+            self.save_checkpoint(x, y, output, true_output) # deindent___________________________
             self.epoch += 1
 
     def train_adversarial(self, trainloader, num_epochs, max_out_length, discriminator, train_disc_only_steps):
@@ -52,8 +52,8 @@ class DialogGenerator:
                 if(self.step >= train_disc_only_steps):
                     step_model(self, gen_loss, True, self.writer, "gen_loss")
                 step_model(discriminator, disc_loss, False, self.writer, "disc_loss")
-                self.save_checkpoint(x, y, output, true_output) # unindent________________________
-                discriminator.save_checkpoint() #unindent___________________________________________
+            self.save_checkpoint(x, y, output, true_output) # unindent________________________
+            discriminator.save_checkpoint() #unindent___________________________________________
             self.epoch += 1
 
     def save_checkpoint(self, x, y, output, true_output):
@@ -81,7 +81,7 @@ class DialogGenerator:
         ce_loss = CrossEntropyLoss()
         batches = y.size(0)
         max_length = max(max_length, y.size(1))
-        max_length = 3 # remove__________________________________________________________
+        #max_length = 3 # remove__________________________________________________________
         generated = torch.zeros(batches, 0, dtype=torch.long).to(self.device)
         true_generated = torch.zeros(batches, max_length, dtype=torch.long).to(self.device)
         losses = torch.empty(batches, max_length).to(self.device)
