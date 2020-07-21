@@ -37,7 +37,7 @@ class DialogDiscriminator:
             retokenized_list2.append((x_new, y2_new))
         retokenized_list = retokenized_list1 + retokenized_list2
         X, Y = DialogDataset.collate_with_padding(retokenized_list, self.tokenizer.pad_token_id)
-        return torch.cat((X,Y), dim=1)
+        return torch.cat((X,Y), dim=1).to(self.device)
 
     def retokenize_vect(self, vect, from_tok):
         filtered = DialogDataset.filter_token(vect, from_tok.eos_token_id)
@@ -52,7 +52,7 @@ class DialogDiscriminator:
             input = self.retokenize_batch(x, gen_input, real_input, gen_tokenizer)
             labels = torch.cat((
                 torch.ones(gen_input.size(0)), 
-                torch.zeros(real_input.size(0))), dim=0).long()
+                torch.zeros(real_input.size(0))), dim=0).long().to(self.device)
             disc_loss, logits = self.disc_model(input, labels=labels)
             disc_losses = torch.cat((disc_losses, disc_loss.unsqueeze(0)))
             scores[:,i] = logits[:,0] - logits[:,1]
