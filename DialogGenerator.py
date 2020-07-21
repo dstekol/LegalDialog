@@ -49,7 +49,7 @@ class DialogGenerator:
                 x, y = x.to(self.device), y.to(self.device)
                 output, losses, true_output = self.generate_with_forcing(x, y, 1, max_out_length)
                 gen_loss, disc_loss = discriminator.weight_losses(x, y, true_output, losses, self.tokenizer)
-                
+                gen_loss, disc_loss = gen_loss.to(self.device), disc_loss.to(self.device)
                 if(self.step >= train_disc_only_steps):
                     step_model(self, gen_loss, True, self.writer, "gen_loss")
                 step_model(discriminator, disc_loss, False, self.writer, "disc_loss")

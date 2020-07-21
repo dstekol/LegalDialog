@@ -13,6 +13,8 @@ class DialogDiscriminator:
         self.step = 0
         self.epoch = 0
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if(torch.cuda.device_count()>=2):
+            self.device = torch.device("cuda:1")
         #self.device = torch.device("cpu") #remove _______________________________________
         self.optimizer = create_optimizer(self.disc_model, opt_params["weight_decay"], opt_params["lr"], opt_params["epsilon"])
         self.scheduler = create_scheduler(self.optimizer, opt_params["warmup_steps"], opt_params["total_steps"])
@@ -44,6 +46,7 @@ class DialogDiscriminator:
         return self.tokenizer.encode(from_tok.decode(filtered), add_special_tokens=False, return_tensors='pt').long().to(self.device)
         
     def weight_losses(self, x, y, gen_output, gen_losses, gen_tokenizer):
+        x, y, gen_output, gen_losses = x.to(self.device), y.to(self.device), gen_output.to(self.device), gen_losses.to(self.device)
         scores = torch.empty(gen_output.size(0)*2, gen_output.size(1)).to(self.device)
         disc_losses = torch.empty(0).to(self.device)
         for i in tqdm(range(gen_output.size(1)), desc="weighting"):
