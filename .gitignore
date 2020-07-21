@@ -16,6 +16,7 @@
 *.torch
 __pycache__/
 .vs/
+test_model/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

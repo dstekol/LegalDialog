@@ -1,90 +1,69 @@
 import torch
 import torch.nn as nn
-from torch.nn import CrossEntropyLoss
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, AdamW, get_linear_schedule_with_warmup
-import DialogDiscriminator
+from torch.nn import CrossEntropyLoss, Softmax
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import tensorboardX
 import pickle
+from DialogDataset import DialogDataset
+from train_utils import create_optimizer, create_scheduler, step_model
+from tqdm import tqdm
 
-class DialogGenerator(torch.nn.Module):
+class DialogGenerator:
     """description of class"""
 
-    def __init__(self, trained_path, meta_path, save_path):
+    def __init__(self, trained_path, save_path):
         super(DialogGenerator, self).__init__()
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        self.gen_model = GPT2LMHeadModel.from_pretrained("gpt2", pad_token_id=self.tokenizer.eos_token_id)
+        self.gen_model = GPT2LMHeadModel.from_pretrained("gpt2" if trained_path is None else trained_path, 
+                                                         pad_token_id=self.tokenizer.eos_token_id)
         self.step = 0
         self.epoch = 0
-        if(trained_path is not None):
-            self.gen_model.load_state_dict(torch.load(trained_path))
-        if(meta_path is not None):
-            meta = pickle.load(open(meta_path, 'rb'))
-            self.step = meta.step
-            self.epoch = meta.epoch
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.device = torch.device("cpu")
+        self.device = torch.device("cpu") #remove______________________________________
         self.gen_model.to(self.device)
         self.save_path = save_path
-        self.writer = tensorboardX.SummaryWriter(save_path + "tensorboard/")
-
-    def train_traditional(self, trainloader, num_epochs, forcing_ratio, optimizer, scheduler):
-        self.gen_model.train()
+        if(save_path is not None):
+            self.writer = tensorboardX.SummaryWriter(save_path + "tensorboard/")
         
-        for epoch in range(num_epochs):
-            for x, y in trainloader:
-                x, y = x.to(self.device), y.to(self.device)
-                output, losses, true_output = self.generate_with_forcing(x, y, forcing_ratio)
-                loss = losses.sum()
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
-                self.writer.add_scalar("gen_loss", loss, self.step)
-                self.step += 1
-                self.save_checkpoint(x, y, output, true_output) # deindent
-            self.epoch += 1
+    def set_optimizer(self, opt_params):
+        self.optimizer = create_optimizer(self.gen_model, opt_params["weight_decay"], opt_params["lr"], opt_params["epsilon"])
+        self.scheduler = create_scheduler(self.optimizer, opt_params["warmup_steps"], opt_params["total_steps"])
 
-    def train_adv(self, trainloader, num_epochs, forcing_ratio, optimizer, scheduler, discriminator):
+        
+    def train_traditional(self, trainloader, num_epochs, max_out_length):
         self.gen_model.train()
-        for epoch in range(num_epochs):
-            for x, y in trainloader:
+        for epoch in tqdm(range(num_epochs), desc="epochs"):
+            for x, y in tqdm(trainloader, desc="batches"):
                 x, y = x.to(self.device), y.to(self.device)
-                output, losses, true_output = self.generate_with_forcing(x, y, forcing_ratio)
-                loss = discriminator.weight_losses(output, losses, self.tokenizer)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
-                self.writer.add_scalar("gen_loss", loss, self.step)
-                self.step += 1
-                discriminator.update(output, y)
-                self.save_checkpoint(x, y, output, true_output) # deindent
-                discriminator.save_checkpoint()
+                output, losses, true_output = self.generate_with_forcing(x, y, 1, max_out_length)
+                loss = losses.sum()
+                step_model(self, loss, self.writer, "gen_loss")
+                self.save_checkpoint(x, y, output, true_output) # deindent___________________________
             self.epoch += 1
-        optimizer = self.create_optimizer(args)
-        scheduler = self.create_scheduler(optimizer, args)
-        for epoch in range(num_epochs):
-            for x, y in trainloader:
-                x, y = x.to(self.device), y.to(self.device)
-                output, losses, true_output = self.generate_with_forcing(x, y, forcing_ratio)
-                loss = discriminator.weight_losses(output, losses)
-                optimizer.zero_grad()
-                loss.backward()
-                optim.step()
-                scheduler.step()
-                discriminator.update(output, y)
 
-            self.save_checkpoint(epoch, x, y, output, true_output)
-            discriminator.save_model(epoch)
+    def train_adversarial(self, trainloader, num_epochs, max_out_length, discriminator, train_disc_only_steps):
+        self.gen_model.train()
+        for epoch in tqdm(range(num_epochs), desc="epochs"):
+            for x, y in tqdm(trainloader, desc="batches"):
+                x, y = x.to(self.device), y.to(self.device)
+                output, losses, true_output = self.generate_with_forcing(x, y, 1, max_out_length)
+                gen_loss, disc_loss = discriminator.weight_losses(x, y, true_output, losses, self.tokenizer)
+                
+                if(self.step >= train_disc_only_steps):
+                    step_model(self, gen_loss, True, self.writer, "gen_loss")
+                step_model(discriminator, disc_loss, False, self.writer, "disc_loss")
+                self.save_checkpoint(x, y, output, true_output) # unindent________________________
+                discriminator.save_checkpoint() #unindent___________________________________________
+            self.epoch += 1
 
     def save_checkpoint(self, x, y, output, true_output):
-        torch.save(self.gen_model.state_dict, self.save_path + "epoch_" + str(self.epoch) + "_gen.torch")
-        pickle.dump({epoch: self.epoch, step: self.step}, self.save_path + "epoch_" + str(self.epoch) + "_meta.pkl")
+        save_file = self.save_path + "epoch_" + str(self.epoch) + "_gen"
+        self.gen_model.save_pretrained(save_file)
         with open(self.save_path + "epoch_" + str(self.epoch) + "sample.txt", "w") as f:
             for inp, label, out, true_out in zip(x, y, output, true_output):
-                text_inp = self.tokenizer.decode(self.filter_token(inp, self.tokenizer.eos_token_id))
-                text_label = self.tokenizer.decode(self.filter_token(label, self.tokenizer.eos_token_id))
-                text_out = self.tokenizer.decode(self.filter_token(out, self.tokenizer.eos_token_id))
+                text_inp = self.tokenizer.decode(DialogDataset.filter_token(inp, self.tokenizer.eos_token_id))
+                text_label = self.tokenizer.decode(DialogDataset.filter_token(label, self.tokenizer.eos_token_id))
+                text_out = self.tokenizer.decode(DialogDataset.filter_token(out, self.tokenizer.eos_token_id))
                 f.write("Input:\n" + text_inp + "\n")
                 f.write("Label:\n" + text_label + "\n")
                 f.write("True Output:\n" + self.get_generated_seqs(out, true_out) + "\n\n")
@@ -95,18 +74,14 @@ class DialogGenerator(torch.nn.Module):
             if(token_id==self.tokenizer.eos_token_id):
                 break
             sent_ids = torch.cat((out[0:i], true_out[i].unsqueeze(0)))
-            sents.append(self.tokenizer.decode(sent_ids))
+            sents.append(self.tokenizer.decode(sent_ids).strip())
         return "\n".join(sents)
 
-    def filter_token(self, vect, filter_token):
-        mask = vect != filter_token
-        inds = torch.nonzero(mask).squeeze()
-        return vect[inds]
-
-    def generate_with_forcing(self, x, y, forcing_ratio):
+    def generate_with_forcing(self, x, y, forcing_ratio, max_length):
         ce_loss = CrossEntropyLoss()
-        batches, max_length = y.size()
-        max_length = 3 # remove
+        batches = y.size(0)
+        max_length = max(max_length, y.size(1))
+        max_length = 3 # remove__________________________________________________________
         generated = torch.zeros(batches, 0, dtype=torch.long).to(self.device)
         true_generated = torch.zeros(batches, max_length, dtype=torch.long).to(self.device)
         losses = torch.empty(batches, max_length).to(self.device)
@@ -125,59 +100,42 @@ class DialogGenerator(torch.nn.Module):
             true_generated[:,i] = gen_words
         return generated, losses, true_generated
 
-    
-    def create_optimizer(self, weight_decay, lr, epsilon):
-        param_optimizer = list(self.gen_model.named_parameters())
-        no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-                "weight_decay": weight_decay,
-            },
-            {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-        ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=lr, eps=epsilon)
-        return optimizer
-
-    def create_scheduler(self, optimizer, warmup_steps, total_steps):
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps
-        )
-        return scheduler
-
     def eval(self, test_loader):
-        #perps = []
-        #with torch.no_grad():
-        #    for x, y in test_loader:
-        #        probs = self.get_probs(x, y)
-        #        for prob_list in probs:
-        #            perps.append(self.calc_perplexity(prob_list))
-        #return sum(perps) / len(perps)
-        perps = []
         with torch.no_grad():
+            self.gen_model.eval()
+            perplexities = torch.empty(0, dtype=torch.float).to(self.device)
             for x, y in test_loader:
                 loss = self.gen_model(x, lm_labels=y)
-                for prob_list in probs:
-                    perps.append(self.calc_perplexity(prob_list))
-        return sum(perps) / len(perps)
+                probs = self.get_probs(x, y)
+                perplexities = torch.cat((perplexities, self.calc_perplexities(probs)))
+            return perplexities.mean()
 
-    def calc_perplexity(self, prob_list):
-        return prob_list.prod().item() ** (-1 / len(prob_list))
+    def calc_perplexities(self, probs):
+        prob_prods = probs.log().sum(dim=1).exp()
+        return prob_prods.pow(-1 / probs.size(1))
 
-    def get_probs(x, y):
+    def get_probs(self, x, y):
+        softmax_fn = Softmax()
         batches, max_length = y.size()
-        probs = torch.empty_like(y)
+        probs = torch.ones_like(y).float().to(self.device)
         for i in range(max_length):
             input = torch.cat((x, y[:,0:i]), dim=1)
             output = self.gen_model(input)
             logits = output[0][:, -1, :]
-            probs[:,i] = logits[y[:,i]]
+            vocab_dist = softmax_fn(logits)
+            inds = y[:,i].unsqueeze(1)
+            probs[:,i] = vocab_dist.gather(1, inds).squeeze(1)
         return probs
 
-    def generate(self, sent, max_length):
+    def generate(self, sent, max_length, num_beams):
         x = self.tokenizer.encode(sent, return_tensors='pt')
-        output, _, _ = self.generate_with_forcing(x, y = torch.zeros(1, max_length), forcing_ratio = 0)
-        output = self.filter_token(output.squeeze(), self.tokenizer.eos_token_id)
+        if(num_beams==0):
+            output = self.gen_model.generate(x, max_length=max_length)
+        else:
+            beams = self.gen_model.generate(x, max_length=max_length, num_beams=num_beams, early_stopping=True)
+            output = beams[0]
+        #output, _, _ = self.generate_with_forcing(x, y = torch.zeros(1, max_length), forcing_ratio = 0)
+        output = DialogDataset.filter_token(output.squeeze(), self.tokenizer.eos_token_id)
         return self.tokenizer.decode(output)
     
 
