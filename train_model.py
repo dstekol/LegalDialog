@@ -14,7 +14,7 @@ def prep_folder(args):
 if(__name__=="__main__"):
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=3, dest="epochs", help='Number of epochs to run')
-    parser.add_argument('--batch-size', type=int, default=2, dest="batch_size", help='Batch size')
+    parser.add_argument('--batch-size', type=int, default=50, dest="batch_size", help='Batch size')
     parser.add_argument('--max-out-length', type=int, default=128, dest="max_out_length", help='Maximum output length (outputs truncated if longer)')
     parser.add_argument('--adversarial-model', type=str, default=None, dest="adv_model", help='Type of adversarial model to use. Will use traditional teacher forcing if None.')
     parser.add_argument('--train-disc-only-steps', type=int, default=0, dest="train_disc_only_steps", help='Number of steps for which to train discriminator only (without updating generator)')

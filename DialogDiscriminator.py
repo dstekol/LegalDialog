@@ -41,7 +41,7 @@ class DialogDiscriminator:
 
     def retokenize_vect(self, vect, from_tok):
         filtered = DialogDataset.filter_token(vect, from_tok.eos_token_id)
-        return self.tokenizer.encode(from_tok.decode(filtered), add_special_tokens=False, return_tensors='pt').to(self.device)
+        return self.tokenizer.encode(from_tok.decode(filtered), add_special_tokens=False, return_tensors='pt').long().to(self.device)
         
     def weight_losses(self, x, y, gen_output, gen_losses, gen_tokenizer):
         scores = torch.empty(gen_output.size(0)*2, gen_output.size(1)).to(self.device)
