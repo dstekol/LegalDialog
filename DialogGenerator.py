@@ -105,9 +105,8 @@ class DialogGenerator:
         with torch.no_grad():
             self.gen_model.eval()
             perplexities = torch.empty(0, dtype=torch.float).to(self.device)
-            for x, y in test_loader:
-                loss = self.gen_model(x, lm_labels=y)
-                probs = self.get_probs(x, y)
+            for x, y in tqdm(test_loader, desc="eval"):
+                probs = self.get_probs(x.to(self.device), y.to(self.device))
                 perplexities = torch.cat((perplexities, self.calc_perplexities(probs)))
             return perplexities.mean()
 
@@ -116,7 +115,7 @@ class DialogGenerator:
         return prob_prods.pow(-1 / probs.size(1))
 
     def get_probs(self, x, y):
-        softmax_fn = Softmax()
+        softmax_fn = Softmax(dim=1)
         batches, max_length = y.size()
         probs = torch.ones_like(y).float().to(self.device)
         for i in range(max_length):
