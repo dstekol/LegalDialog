@@ -129,15 +129,16 @@ class DialogGenerator:
         return probs
 
     def generate(self, sent, max_length, num_beams):
-        x = self.tokenizer.encode(sent, return_tensors='pt').to(self.device)
-        if(num_beams==0):
-            output = self.gen_model.generate(x, max_length=max_length)
-        else:
-            beams = self.gen_model.generate(x, max_length=max_length, num_beams=num_beams, early_stopping=True)
-            output = beams[0]
-        #output, _, _ = self.generate_with_forcing(x, y = torch.zeros(1, max_length), forcing_ratio = 0)
-        output = DialogDataset.filter_token(output.squeeze(), self.tokenizer.eos_token_id)
-        return self.tokenizer.decode(output)
+        with torch.no_grad():
+            x = self.tokenizer.encode(sent, return_tensors='pt').to(self.device)
+            if(num_beams==0):
+                output = self.gen_model.generate(x, max_length=max_length)
+            else:
+                beams = self.gen_model.generate(x, max_length=max_length, num_beams=num_beams, early_stopping=True)
+                output = beams[0]
+            #output, _, _ = self.generate_with_forcing(x, y = torch.zeros(1, max_length), forcing_ratio = 0)
+            output = DialogDataset.filter_token(output.squeeze(), self.tokenizer.eos_token_id)
+            return self.tokenizer.decode(output)
     
 
 
