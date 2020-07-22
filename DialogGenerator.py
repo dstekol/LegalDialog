@@ -129,7 +129,7 @@ class DialogGenerator:
         return probs
 
     def generate(self, sent, max_length, num_beams):
-        x = self.tokenizer.encode(sent, return_tensors='pt')
+        x = self.tokenizer.encode(sent, return_tensors='pt').to(self.device)
         if(num_beams==0):
             output = self.gen_model.generate(x, max_length=max_length)
         else:
