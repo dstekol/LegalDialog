@@ -126,8 +126,6 @@ class DialogGenerator:
             vocab_dist = softmax_fn(logits)
             inds = y[:,i].unsqueeze(1)
             probs[:,i] = vocab_dist.gather(1, inds).squeeze(1).clamp(max = 1 - 1e-5)
-        if(1 in probs):
-            i=1
         return probs
 
     def generate(self, sent, max_length, num_beams):
