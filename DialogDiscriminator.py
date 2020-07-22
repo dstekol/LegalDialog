@@ -3,6 +3,7 @@ from train_utils import create_optimizer, create_scheduler
 import pickle
 from DialogDataset import DialogDataset
 import torch
+from tqdm import tqdm
 
 class DialogDiscriminator:
     """description of class"""
