@@ -7,6 +7,7 @@ import pickle
 from DialogDataset import DialogDataset
 from train_utils import create_optimizer, create_scheduler, step_model
 from tqdm import tqdm
+import math
 
 class DialogGenerator:
     """description of class"""
@@ -111,8 +112,8 @@ class DialogGenerator:
             return perplexities.mean()
 
     def calc_perplexities(self, probs):
-        prob_prods = probs.log().sum(dim=1).exp()
-        return prob_prods.pow(-1 / probs.size(1))
+        perps = (probs.log().sum(dim=1) * -1 / probs.size(1)).exp()
+        return perps
 
     def get_probs(self, x, y):
         softmax_fn = Softmax(dim=1)
@@ -124,7 +125,9 @@ class DialogGenerator:
             logits = output[0][:, -1, :]
             vocab_dist = softmax_fn(logits)
             inds = y[:,i].unsqueeze(1)
-            probs[:,i] = vocab_dist.gather(1, inds).squeeze(1)
+            probs[:,i] = vocab_dist.gather(1, inds).squeeze(1).clamp(max = 1 - 1e-5)
+        if(1 in probs):
+            i=1
         return probs
 
     def generate(self, sent, max_length, num_beams):
