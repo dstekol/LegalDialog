@@ -57,6 +57,7 @@ class DialogGenerator:
             self.save_checkpoint(x, y, output, true_output) # unindent________________________
             discriminator.save_checkpoint() #unindent___________________________________________
             self.epoch += 1
+            discriminator.epoch += 1
 
     def save_checkpoint(self, x, y, output, true_output):
         save_file = self.save_path + "epoch_" + str(self.epoch) + "_gen"

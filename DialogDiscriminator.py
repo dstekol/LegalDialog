@@ -57,7 +57,9 @@ class DialogDiscriminator:
             labels = torch.cat((
                 torch.ones(gen_input.size(0)), 
                 torch.zeros(real_input.size(0))), dim=0).long().to(self.device)
-            disc_loss, logits = self.disc_model(input, labels=labels)
+            disc_output = self.disc_model(input, labels=labels)
+            disc_loss = disc_output[0]
+            logits = disc_output[1]
             disc_losses = torch.cat((disc_losses, disc_loss.unsqueeze(0)))
             scores[:,i] = logits[:,0] - logits[:,1]
         gen_scores = scores[:gen_output.size(0),:]
