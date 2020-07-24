@@ -51,7 +51,7 @@ if(__name__=="__main__"):
                       "lr": args.gen_lr, 
                       "warmup_steps": args.gen_warmup_steps,
                       "epsilon": args.gen_epsilon,
-                      "total_steps": int(len(train_dataset) / args.batch_size) }
+                      "total_steps": int(len(train_dataset) / args.batch_size) * args.epochs }
     generator.set_optimizer(gen_opt_params)
 
     if(args.adv_model is not None):
@@ -59,7 +59,7 @@ if(__name__=="__main__"):
                            "lr": args.disc_lr, 
                            "warmup_steps": args.disc_warmup_steps,
                             "epsilon": args.disc_epsilon,
-                           "total_steps": int(len(train_dataset) / args.batch_size) }
+                           "total_steps": int(len(train_dataset) / args.batch_size) * args.epochs }
         discriminator = DialogDiscriminator(args.adv_model, args.pretrained_disc, args.save_folder, disc_opt_params)
         
         generator.train_adversarial(train_loader, args.epochs, args.max_out_length, discriminator, args.train_disc_only_steps)
