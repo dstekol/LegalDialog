@@ -24,7 +24,7 @@ if(__name__=="__main__"):
             x = x.to(generator.device)
             out = generator.gen_model.generate(x, max_length=80, early_stopping=True)
             out2 = out[:,x.size(1):]
-            outlist = out2.tolist()
+            outlist = out2[0].tolist()
             outset = set(outlist)
             reps.append(len(outlist) - len(outset))
         print("avg reps")
