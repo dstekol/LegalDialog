@@ -103,14 +103,19 @@ class DialogGenerator:
             true_generated[:,i] = gen_words
         return generated, losses, true_generated
 
-    def eval(self, test_loader):
+    def eval(self, test_loader, max_length):
         with torch.no_grad():
             self.gen_model.eval()
+            word_repetitions = []
             perplexities = torch.empty(0, dtype=torch.float).to(self.device)
             for x, y in tqdm(test_loader, desc="eval"):
                 probs = self.get_probs(x.to(self.device), y.to(self.device))
                 perplexities = torch.cat((perplexities, self.calc_perplexities(probs)))
-            return perplexities.mean()
+                out = generator.gen_model.generate(x, max_length=max_length, early_stopping=True)[:,x.size(1):][0].tolist()
+                out_words = set(out)
+                word_repetitions.append(len(out) - len(out_words))
+            avg_reps = sum(word_repetitions) / len(word_repetitions)
+            return perplexities.mean().item(), avg_reps
 
     def calc_perplexities(self, probs):
         perps = (probs.log().sum(dim=1) * -1 / probs.size(1)).exp()
@@ -137,7 +142,6 @@ class DialogGenerator:
             else:
                 beams = self.gen_model.generate(x, max_length=max_length, num_beams=num_beams, early_stopping=True)
                 output = beams[0]
-            #output, _, _ = self.generate_with_forcing(x, y = torch.zeros(1, max_length), forcing_ratio = 0)
             output = DialogDataset.filter_token(output.squeeze(), self.tokenizer.eos_token_id)
             return self.tokenizer.decode(output)
     
