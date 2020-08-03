@@ -45,7 +45,7 @@ if(__name__=="__main__"):
     generator = DialogGenerator(args.pretrained_gen, args.save_folder)
 
     train_dataset = DialogDataset(args.train_data_path, generator.tokenizer.eos_token_id)
-    train_loader = train_dataset.get_loader(args.batch_size)
+    train_loader = train_dataset.get_loader(args.batch_size, shuffle=True)
 
     gen_opt_params = {"weight_decay": args.gen_weight_decay, 
                       "lr": args.gen_lr, 

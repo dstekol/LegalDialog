@@ -107,15 +107,20 @@ class DialogGenerator:
         with torch.no_grad():
             self.gen_model.eval()
             word_repetitions = []
+            all_outs = []
             perplexities = torch.empty(0, dtype=torch.float).to(self.device)
             for x, y in tqdm(test_loader, desc="eval"):
-                probs = self.get_probs(x.to(self.device), y.to(self.device))
+                x, y = x.to(self.device), y.to(self.device)
+                probs = self.get_probs(x, y)
                 perplexities = torch.cat((perplexities, self.calc_perplexities(probs)))
-                out = generator.gen_model.generate(x, max_length=max_length, early_stopping=True)[:,x.size(1):][0].tolist()
+                out = self.gen_model.generate(x, max_length=max_length, early_stopping=True)[:,x.size(1):][0].tolist()
                 out_words = set(out)
+                all_outs.append({"in":self.tokenizer.decode(x.squeeze()),
+                                 "real_out": self.tokenizer.decode(y.squeeze()),
+                                 "gen_out": self.tokenizer.decode(out)})
                 word_repetitions.append(len(out) - len(out_words))
             avg_reps = sum(word_repetitions) / len(word_repetitions)
-            return perplexities.mean().item(), avg_reps
+            return perplexities.mean().item(), avg_reps, all_outs
 
     def calc_perplexities(self, probs):
         perps = (probs.log().sum(dim=1) * -1 / probs.size(1)).exp()

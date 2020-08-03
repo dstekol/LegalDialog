@@ -45,12 +45,12 @@ class DialogDataset(Dataset):
             new_vect = new_vect.unsqueeze(0)
         return new_vect
 
-    def get_loader(self, batch_size):
+    def get_loader(self, batch_size, shuffle):
         return DataLoader(
             self,
             batch_size = batch_size,
             collate_fn = DialogDataset.collate,
-            shuffle = True,
+            shuffle = shuffle,
             pin_memory = True
         )
 
