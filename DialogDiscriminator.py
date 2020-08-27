@@ -37,7 +37,7 @@ class DialogDiscriminator:
         save_file = self.save_path + "epoch_" + str(self.epoch) + "_disc"
         self.disc_model.save_pretrained(save_file)
 
-    def retokenize_batch(self, x, y1, y2, from_tok):
+    def retokenize_batch(self, x, gen_out, true_out, from_tok):
         """ Prepares output from generator for input into discriminator.
             Specifically, accepts input query x, generated output y1, and true output y2, 
             retokenizes each vector, inserts necessary SEP and CLS tokens, and generates a 
@@ -48,17 +48,17 @@ class DialogDiscriminator:
         sep = torch.tensor([[self.tokenizer.sep_token_id]]).to(self.device)
         cls = torch.tensor([[self.tokenizer.cls_token_id]]).to(self.device)
 
-        for x_old, y1_old, y2_old in zip(x, y1, y2):
+        for x_old, gen_out_old, true_out_old in zip(x, gen_out, true_out):
             # retokenize each of the vectors
             x_new = torch.cat((cls, self.retokenize_vect(x_old, from_tok), sep), dim=1)
-            y1_new = torch.cat((self.retokenize_vect(y1_old, from_tok), sep), dim=1)
-            y2_new = torch.cat((self.retokenize_vect(y2_old, from_tok), sep), dim=1)
+            gen_out_retok = torch.cat((self.retokenize_vect(gen_out_old, from_tok), sep), dim=1)
+            true_out_retok = torch.cat((self.retokenize_vect(true_out_old, from_tok), sep), dim=1)
 
             # append (input query, generated output) tuple to retokenized list
-            retokenized_gen.append((x_new, y1_new))
+            retokenized_gen.append((x_new, gen_out_retok))
 
             # append (input query, true output) tuple to retokenized list
-            retokenized_true.append((x_new, y2_new))
+            retokenized_true.append((x_new, true_out_retok))
 
         # append retokenized generated vectors and retokenized true vectors into single batch (for parallel processing)
         retokenized_list = retokenized_gen + retokenized_true
@@ -71,30 +71,29 @@ class DialogDiscriminator:
         filtered = DialogDataset.filter_token(vect, from_tok.eos_token_id)
         return self.tokenizer.encode(from_tok.decode(filtered), add_special_tokens=False, return_tensors='pt').long().to(self.device)
         
-    def weight_losses(self, x, y, gen_output, gen_losses, gen_tokenizer):
+    def weight_losses(self, x, true_out, gen_out, gen_losses, gen_tokenizer):
         """ Weights the generator's token losses according to their 'believability',
             as described in Emulating Legal Dialog with Adversarial Weighting paper.
             In other words, this is where the magic happens. """
-        x, y, gen_output, gen_losses = x.to(self.device), y.to(self.device), gen_output.to(self.device), gen_losses.to(self.device)
-        scores = torch.empty(gen_output.size(0)*2, gen_output.size(1)).to(self.device)
+        x, true_out, gen_out, gen_losses = x.to(self.device), true_out.to(self.device), gen_out.to(self.device), gen_losses.to(self.device)
+        scores = torch.empty(gen_out.size(0)*2, gen_out.size(1)).to(self.device)
         disc_losses = torch.empty(0).to(self.device)
         
-        for i in range(gen_output.size(1)):
-            gen_vects = torch.cat((y[:,0:i], gen_output[:,i].unsqueeze(1)), dim=1)
-            real_vects = y[:,0:i+1]
+        for i in range(gen_out.size(1)):
+            gen_vects = torch.cat((true_out[:,0:i], gen_out[:,i].unsqueeze(1)), dim=1)
+            true_vects = true_out[:,0:i+1]
 
             # obtain a batch for input into the discriminator:
-            # each vector begins with the generator input query x
-            # the top half of the batch contains the 'generated' inputs: each vector ends with the token sequence created by the generator, up to the i-th token
-            # the bottom half of the batch contains 'true' inputs: each vector ends with the ground-truth token sequence, up to the i-th token
+            # the first half of the batch contains the 'generated' inputs: each vector begins with the input query x, then the first i-1 ground-truth tokens, and ends with the token outputted by the generator at the i-th step
+            # the second half of the batch contains 'true' inputs: each vector begins with the input query x, and ends with the ground-truth token sequence, up to the i-th token
             # these vectors are appended into a single batch so the believability scores for generated and ground-truth sequences can be computed simultaneously
-            disc_input = self.retokenize_batch(x, gen_vects, real_vects, gen_tokenizer)
+            disc_input = self.retokenize_batch(x, gen_vects, true_vects, gen_tokenizer)
             
-            # create label vector: ones for the top half of the batch (which contains the generated sequences),
-            # and zeros for the bottom half of the batch (which contains the ground-truth sequences). 
+            # create label vector: ones for the first half of the batch (which contains the generated sequences),
+            # and zeros for the second half of the batch (which contains the ground-truth sequences). 
             labels = torch.cat((
                 torch.ones(gen_vects.size(0)), 
-                torch.zeros(real_vects.size(0))), dim=0).long().to(self.device)
+                torch.zeros(true_vects.size(0))), dim=0).long().to(self.device)
             
             # extract discriminator output
             disc_output = self.disc_model(disc_input, labels=labels)
@@ -104,11 +103,11 @@ class DialogDiscriminator:
             scores[:,i] = logits[:,0] - logits[:,1]
 
         # compute believability
-        gen_scores = scores[:gen_output.size(0),:]
-        true_scores = scores[-gen_output.size(0):,:]
+        gen_scores = scores[:gen_out.size(0),:]
+        true_scores = scores[-gen_out.size(0):,:]
         weights = (true_scores - gen_scores).exp()
 
-        # weight generator losses by believability
+        # weight generator losses for each token by believability score of each token
         gen_loss = (gen_losses * weights).sum()
         return gen_loss, disc_losses.sum()
        

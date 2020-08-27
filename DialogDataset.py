@@ -18,17 +18,23 @@ class DialogDataset(Dataset):
 
     @staticmethod
     def collate(data_list):
-        """ Static collate function """
+        """ Static collate function for combining list of tensors into single batched tensor, using previously set pad value. """
         return DialogDataset.collate_with_padding(data_list, DialogDataset.pad_value)
     
     @staticmethod
     def collate_with_padding(data_list, pad_value):
         """ Pads list of tensors to the same length with the given pad value, 
         and returns a batched input-output tuple."""
+
+        # extract the length of the longest input and output tensors
         max_x_len = max([data_entry[0].size(1) for data_entry in data_list])
         max_y_len = max([data_entry[1].size(1) for data_entry in data_list])
+
+        # initialize batched tensors
         X = torch.empty(len(data_list), max_x_len, dtype=torch.long).fill_(pad_value)
         Y = torch.empty(len(data_list), max_y_len, dtype=torch.long).fill_(pad_value)
+
+        # fill batched tensors
         for i, (x, y) in enumerate(data_list):
             X[i,-x.size(1):] = x.squeeze(0)
             Y[i,0:y.size(1)] = y.squeeze(0)

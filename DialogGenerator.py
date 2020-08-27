@@ -159,7 +159,7 @@ class DialogGenerator:
     def get_ngrams(toks, n):
         """ Given a set of tokens, extracts a set of all n-grams present (with given length n). """
         ngrams = set()
-        for i in range(1, len(toks) - n):
+        for i in range(len(toks) - n + 1):
             ngrams.add(tuple(toks[i:i+n]))
         return ngrams
 
@@ -190,8 +190,7 @@ class DialogGenerator:
                 # update set of unique n-grams
                 for n in unique_ngrams:
                     ngrams = DialogGenerator.get_ngrams(out, n)
-                    for ngram in ngrams:
-                        unique_ngrams[n].add(ngram)
+                    unique_ngrams[n] = unique_ngrams[n].union(set(ngrams))
                 
                 # store generated text, along with input query and ground truth
                 all_outs.append({"in":self.tokenizer.decode(x.squeeze()),

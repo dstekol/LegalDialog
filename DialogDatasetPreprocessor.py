@@ -27,9 +27,11 @@ class DialogDatasetPreprocessor(object):
         # compile data into justice-petitioner utterance pairs
         data_pair_list = [(data_list[i], data_list[i+1]) for i in range(0, len(data_list), 2)]
         
-        # dataset split
+        # dataset split: train=0.7, validation=0.2, test=0.1 
         X, Y = zip(*data_pair_list)
+        # split data into training data and nontraining (test & validation) data
         X_train, X_nontrain, Y_train, Y_nontrain = train_test_split(X, Y, test_size=0.3)
+        # split nontraining data into test data and validation data
         X_validate, X_test, Y_validate, Y_test = train_test_split(X_nontrain, Y_nontrain, test_size=.333)
         
         test_data = list(zip(X_test, Y_test))
@@ -42,6 +44,7 @@ class DialogDatasetPreprocessor(object):
 
     @staticmethod
     def parse_fields(raw_data_path):
+        """ Iterates through file and parses each line. """
         data_list = []
         with open(raw_data_path, "r") as f:
             for line in tqdm(f, desc='parsing'):
@@ -52,7 +55,7 @@ class DialogDatasetPreprocessor(object):
 
     @staticmethod
     def filter_utterance_pairs(data_list):
-        """ Removes all justic utterances not followed by petitioner utterances,
+        """ Removes all justice utterances not followed by petitioner utterances,
        and all petitioner utterances not preceded by justice utterances.
        This allows us to split the entire dataset into justice-petitioner query-response pairs."""
         return [data_list[i] for i in tqdm(range(len(data_list)), desc='filtering') if 
@@ -100,8 +103,12 @@ class DialogDatasetPreprocessor(object):
         delete_tokens = []
         for i, token in enumerate(tokens):
             if(token=="--"):
+                # checks for repeating word sequences around '--' token with window sizes from 5 to 1
                 for j in range(5,0,-1):
                     temp_delete_tokens = DialogDatasetPreprocessor.find_repeats(tokens, i, j)
+                    
+                    # if repeating sequence found, add indices to list of tokens to delete
+                    # (do not delete immediately since we are still iterating through sentence)
                     if(len(temp_delete_tokens) > 0):
                         delete_tokens += temp_delete_tokens
                         break
