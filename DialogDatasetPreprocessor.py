@@ -1,5 +1,4 @@
 import pickle
-import constants
 import random
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -9,20 +8,26 @@ import torch
 class DialogDatasetPreprocessor(object):
     """Cleans and parses data from raw data file"""
 
+    # stores the order in which fields appear in each line of the raw dataset
+    DATA_PARSE_MAP = ["CASE_ID", "UTTERANCE_ID", "AFTER_PREVIOUS", "SPEAKER", "IS_JUSTICE", "JUSTICE_VOTE", "PRESENTATION_SIDE", "UTTERANCE"]
+
     @staticmethod
     def preprocess_data_file(raw_data_path, train_output_path, validate_output_path, test_output_path, max_inp_length):
-        
-        #parse each line into fields
+        """Given the path to the raw Supreme Court dialog dataset, extracts fields, 
+        truncates utterances if needed, creates train-val-test split, and saves processed data files."""
+
+        # parse each line into fields
         data_list = DialogDatasetPreprocessor.parse_fields(raw_data_path)
         
-        #filter data so that only justice-petitioner utterance pairs remain
+        # filter data so that only justice-petitioner utterance pairs remain
         data_list = DialogDatasetPreprocessor.filter_utterance_pairs(data_list)
         
         DialogDatasetPreprocessor.tensorize_data_list(data_list, max_inp_length)
         
-        #compile data into justice-petitioner utterance pairs
+        # compile data into justice-petitioner utterance pairs
         data_pair_list = [(data_list[i], data_list[i+1]) for i in range(0, len(data_list), 2)]
         
+        # dataset split
         X, Y = zip(*data_pair_list)
         X_train, X_nontrain, Y_train, Y_nontrain = train_test_split(X, Y, test_size=0.3)
         X_validate, X_test, Y_validate, Y_test = train_test_split(X_nontrain, Y_nontrain, test_size=.333)
@@ -47,6 +52,9 @@ class DialogDatasetPreprocessor(object):
 
     @staticmethod
     def filter_utterance_pairs(data_list):
+        """ Removes all justic utterances not followed by petitioner utterances,
+       and all petitioner utterances not preceded by justice utterances.
+       This allows us to split the entire dataset into justice-petitioner query-response pairs."""
         return [data_list[i] for i in tqdm(range(len(data_list)), desc='filtering') if 
                      (DialogDatasetPreprocessor.is_justice(data_list[i]) 
                         and i+1 < len(data_list) 
@@ -60,45 +68,34 @@ class DialogDatasetPreprocessor(object):
         
     @staticmethod
     def is_justice(data_entry):
+        """Returns whether or not a given data entry is an utterance from a justice."""
         return data_entry["IS_JUSTICE"].upper().strip()=='JUSTICE'
     
     @staticmethod
     def extract_data_elts(raw_line, separator="+++$+++"):
         """Accepts a raw line from the data file, 
-        and splits it into fields according to parse map."""
+        and splits it into fields according to parsing map."""
 
         elts = raw_line.split(separator)
-        return {field: elts[i] for i, field in enumerate(constants.DATA_PARSE_MAP)}
+        return {field: elts[i] for i, field in DATA_PARSE_MAP}
 
     @staticmethod
     def tensorize_data_list(data_list, max_length):
+        """ Converts utterances to pytorch tensors using huggingface tokenizer. """
         tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         for item in tqdm(data_list, desc="tokenizing"):
             item["TENSOR"] = DialogDatasetPreprocessor.tensorize(item["UTTERANCE"], tokenizer, max_length)
 
     @staticmethod
     def tensorize(sent, tokenizer, max_length):
+        """ Converts a given sentence to a pytorch tensor using the given tokenizer, 
+        truncating the tensor if needed. Used by tensorize_data_list() method. """
         return torch.cat((tokenizer.encode(sent, return_tensors="pt", truncation=True, max_length = max_length, add_special_tokens=False), 
                           torch.tensor([[tokenizer.eos_token_id]])), dim=1)
 
-    #@staticmethod
-    #def train_test_split(data, split_ratio):
-    #    inds = list(range(len(data)))
-    #    random.shuffle(inds)
-    #    cutoff = int(split_ratio * len(data))
-    #    train_inds = set(inds[0:cutoff])
-    #    train = []
-    #    test = []
-    #    for i in range(len(data)):
-    #        if(i in train_inds):
-    #            train.append(data[i])
-    #        else:
-    #            test.append(data[i])
-    #    return train, test
-
     @staticmethod
     def clean_utterance(utt):
-        """Removes repeated words surrounding '--' token"""
+        """Removes repeated word sequences surrounding the '--' token"""
         tokens = utt.split(" ")
         delete_tokens = []
         for i, token in enumerate(tokens):

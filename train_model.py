@@ -6,6 +6,7 @@ from DialogDiscriminator import DialogDiscriminator
 import os
 
 def prep_folder(args):
+    """ Append to slash to filepath if needed, and generate folder if it doesn't exist"""
     if(args.save_folder[-1]!='/'):
         args.save_folder += '/'
     if(not os.path.isdir(args.save_folder)):
@@ -31,8 +32,8 @@ if(__name__=="__main__"):
 
     parser.add_argument('--train-data-path', type=str, dest="train_data_path", help="Filepath to preprocessed data")
     parser.add_argument('--save-folder', type=str, dest="save_folder", help="Filepath to folder where checkpoints should be saved")
-    parser.add_argument('--pretrained-gen', type=str, default=None, dest="pretrained_gen", help="Filepath to pretrained generator")
-    parser.add_argument('--pretrained-disc', type=str, default=None, dest="pretrained_disc", help="Filepath to pretrained discriminator")
+    parser.add_argument('--pretrained-gen', type=str, default=None, dest="pretrained_gen", help="Filepath to trained generator.  If None, will instantiate a default pretrained generator.")
+    parser.add_argument('--pretrained-disc', type=str, default=None, dest="pretrained_disc", help="Filepath to trained discriminator. If None, will instantiate a default pretrained discriminator of type specified by --adversarial-model option.")
 
     args = parser.parse_args()
 
@@ -41,10 +42,8 @@ if(__name__=="__main__"):
 
     prep_folder(args)
     
-    
-    generator = DialogGenerator(args.pretrained_gen, args.save_folder)
-
-    train_dataset = DialogDataset(args.train_data_path, generator.tokenizer.eos_token_id)
+    eos_token_id = GPT2Tokenizer.from_pretrained("gpt2").eos_token_id
+    train_dataset = DialogDataset(args.train_data_path, eos_token_id)
     train_loader = train_dataset.get_loader(args.batch_size, shuffle=True)
 
     gen_opt_params = {"weight_decay": args.gen_weight_decay, 
@@ -52,7 +51,8 @@ if(__name__=="__main__"):
                       "warmup_steps": args.gen_warmup_steps,
                       "epsilon": args.gen_epsilon,
                       "total_steps": int(len(train_dataset) / args.batch_size) * args.epochs }
-    generator.set_optimizer(gen_opt_params)
+
+    generator = DialogGenerator(args.pretrained_gen, args.save_folder, gen_opt_params)
 
     if(args.adv_model is not None):
         disc_opt_params = {"weight_decay": args.disc_weight_decay, 
