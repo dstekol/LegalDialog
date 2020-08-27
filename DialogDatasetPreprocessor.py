@@ -80,7 +80,7 @@ class DialogDatasetPreprocessor(object):
         and splits it into fields according to parsing map."""
 
         elts = raw_line.split(separator)
-        return {field: elts[i] for i, field in DATA_PARSE_MAP}
+        return {field: elts[i] for i, field in enumerate(DialogDatasetPreprocessor.DATA_PARSE_MAP)}
 
     @staticmethod
     def tensorize_data_list(data_list, max_length):
