@@ -15,7 +15,7 @@ if(__name__=="__main__"):
     
     args = parser.parse_args()
 
-    generator = DialogGenerator(args.pretrained_gen, None)
+    generator = DialogGenerator(args.pretrained_gen, None, None)
     test_dataset = DialogDataset(args.test_data_path, generator.tokenizer.eos_token_id)
     test_loader = test_dataset.get_loader(1, shuffle=False)
 
@@ -23,6 +23,6 @@ if(__name__=="__main__"):
     print("Average perplexity:\n" + str(avg_perplexity))
     print("Average token repetition:\n" + str(avg_repetition))
     for n in unique_ngrams:
-        print("Unique " + str(n) + "-grams: " + len(unique_ngrams[n]))
+        print("Unique " + str(n) + "-grams: " + str(len(unique_ngrams[n])))
     pickle.dump(all_outs, open(args.save_path, "wb"))
 

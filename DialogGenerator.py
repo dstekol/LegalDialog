@@ -28,8 +28,9 @@ class DialogGenerator:
         print(self.device)
 
         # instantiates optimizer and scheduler with given configuration options
-        self.optimizer = create_optimizer(self.gen_model, opt_params["weight_decay"], opt_params["lr"], opt_params["epsilon"])
-        self.scheduler = create_scheduler(self.optimizer, opt_params["warmup_steps"], opt_params["total_steps"])
+        if(opt_params is not None):
+            self.optimizer = create_optimizer(self.gen_model, opt_params["weight_decay"], opt_params["lr"], opt_params["epsilon"])
+            self.scheduler = create_scheduler(self.optimizer, opt_params["warmup_steps"], opt_params["total_steps"])
 
         # save checkpoint path
         self.save_path = save_path
@@ -42,10 +43,16 @@ class DialogGenerator:
         for epoch in tqdm(range(num_epochs), desc="epochs"):
             for x, y in tqdm(trainloader, desc="batches"):
                 x, y = x.to(self.device), y.to(self.device)
-                losses, forced_output, true_output = self.generate_with_forcing(x, y, max_out_length)
+
+                # get teacher forcing losses and outputs
+                losses, forced_output, gen_output = self.generate_with_forcing(x, y, max_out_length)
+
+                # compute loss as sum of token losses
                 loss = losses.sum()
+
+                # update generator
                 step_model(self, loss, False, self.writer, "gen_loss")
-            self.save_checkpoint(x, y, forced_output, true_output)
+            self.save_checkpoint(x, y, forced_output, gen_output)
             self.epoch += 1
 
     def train_adversarial(self, trainloader, num_epochs, max_out_length, discriminator, train_disc_only_steps):
@@ -56,10 +63,10 @@ class DialogGenerator:
                 x, y = x.to(self.device), y.to(self.device)
 
                 # get teacher forcing losses and outputs
-                losses, forced_output, true_output = self.generate_with_forcing(x, y, max_out_length)
+                losses, forced_output, gen_output = self.generate_with_forcing(x, y, max_out_length)
                 
                 # get weighted loss from discriminator
-                gen_loss, disc_loss = discriminator.weight_losses(x, y, true_output, losses, self.tokenizer)
+                gen_loss, disc_loss = discriminator.weight_losses(x, y, gen_output, losses, self.tokenizer)
                 gen_loss, disc_loss = gen_loss.to(self.device), disc_loss.to(self.device)
 
                 # Update generator if minimum number of discriminiator warmup steps have elapsed.
@@ -72,44 +79,44 @@ class DialogGenerator:
                 step_model(discriminator, disc_loss, False, self.writer, "disc_loss")
 
             # save generator and discriminator checkpoints
-            self.save_checkpoint(x, y, forced_output, true_output)
+            self.save_checkpoint(x, y, forced_output, gen_output)
             discriminator.save_checkpoint()
 
             # update logging variables
             self.epoch += 1
             discriminator.epoch += 1
 
-    def save_checkpoint(self, x, y, output, true_output):
+    def save_checkpoint(self, x, y, output, gen_output):
         # save model checkpoint
         save_file = self.save_path + "epoch_" + str(self.epoch) + "_gen"
         self.gen_model.save_pretrained(save_file)
         
         # print sample inputs and outputs
         with open(self.save_path + "epoch_" + str(self.epoch) + "sample.txt", "w") as f:
-            for inp, label, out, true_out in zip(x, y, output, true_output):
+            for inp, label, out, gen_out in zip(x, y, output, gen_output):
                 text_inp = self.tokenizer.decode(DialogDataset.filter_token(inp, self.tokenizer.eos_token_id))
                 text_label = self.tokenizer.decode(DialogDataset.filter_token(label, self.tokenizer.eos_token_id))
                 text_out = self.tokenizer.decode(DialogDataset.filter_token(out, self.tokenizer.eos_token_id))
                 f.write("Input:\n" + text_inp + "\n")
                 f.write("Label:\n" + text_label + "\n")
-                f.write("True Output:\n" + self.get_generated_seqs(out, true_out) + "\n\n")
+                f.write("True Output:\n" + self.get_generated_seqs(out, gen_out) + "\n\n")
 
-    def get_generated_seqs(self, out, true_out):
+    def get_generated_seqs(self, out, gen_out):
         """ Given a true sentence and a list of words generated at each index, 
             outputs list of sentence fragments such that the last word is the generated word,
             and all preceding words are derived from the true label.
-            For example, given the true label true_out=['She', 'went', 'to', 'school'] 
-            and words generated at each step out=['I', 'was', 'away', 'lunch'], 
+            For example, given the true label out=['She', 'went', 'to', 'school'] 
+            and words generated at each step gen_out=['I', 'was', 'away', 'lunch'], 
             this function outputs the list of strings
             I                   [the first word generated by the model]
             She went            [Showing that the model generated 'went' as the most likely extension to 'She']
             She went away       [Showing that the model generated 'away' as the most extension to 'She went']
             She went to lunch   [Showing that the model generated 'lunch' as the most extension to 'She went to'] """
         sents = []
-        for i, token_id in enumerate(true_out):
+        for i, token_id in enumerate(gen_out):
             if(token_id==self.tokenizer.eos_token_id):
                 break
-            sent_ids = torch.cat((out[0:i], true_out[i].unsqueeze(0)))
+            sent_ids = torch.cat((out[0:i], gen_out[i].unsqueeze(0)))
             sents.append(self.tokenizer.decode(sent_ids).strip())
         return "\n".join(sents)
 
@@ -180,8 +187,9 @@ class DialogGenerator:
                 probs = self.get_probs(x, y)
                 perplexities = torch.cat((perplexities, self.calc_perplexities(probs)))
 
-                # get generated text
-                out = self.gen_model.generate(x, max_length=max_length, early_stopping=True)[:,x.size(1):][0].tolist()
+                # get generated text (trim to exclude input)
+                max_total_length = x.size(1) + max_length
+                out = self.gen_model.generate(x, max_length=max_total_length, early_stopping=True)[:,x.size(1):][0].tolist()
                 
                 # compute intra-utterance token repetition for given sequence
                 out_toks = set(out)

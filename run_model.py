@@ -10,7 +10,7 @@ if(__name__=="__main__"):
     
     args = parser.parse_args()
 
-    generator = DialogGenerator(args.pretrained_gen, None)
+    generator = DialogGenerator(args.pretrained_gen, None, None)
     output = generator.generate(args.input, args.max_length, args.num_beams)
 
     print(output)

@@ -68,4 +68,10 @@ Command line options:
 --max-length			Maximum length of generated token sequences, past which the sequences will be automatically truncated.
 
 Example:
-python run_model.py --input "What is the plaintiff's complaint?" --pretrained-gen "test_model/epoch_0_gen" --beams 3 --max-length 40
+python run_model.py --input "What is the plaintiff's complaint?" --pretrained-gen "adversarial_bert/epoch_0_gen" --beams 3 --max-length 40
+
+
+TRAINED MODELS
+Trained models (including per-epoch checkpoints) can be found at:
+https://drive.google.com/drive/folders/1kjVNvP34tbMiWMNDog2UeFWfgYPCaJJy?usp=sharing
+These files are not included directly in the project submission as they are extremely large.

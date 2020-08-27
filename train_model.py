@@ -3,6 +3,7 @@ import argparse
 from DialogGenerator import DialogGenerator
 from DialogDataset import DialogDataset
 from DialogDiscriminator import DialogDiscriminator
+from transformers import GPT2Tokenizer
 import os
 
 def prep_folder(args):
